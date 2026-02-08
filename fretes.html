@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fretes e Mudanças</title>
+
+<!-- FullCalendar -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background:#f4f4f4;
+  padding:12px;
+}
+
+.card {
+  background:#fff;
+  padding:16px;
+  border-radius:14px;
+  max-width:1100px;
+  margin:auto;
+  box-shadow:0 8px 20px rgba(0,0,0,.12);
+}
+
+.grid {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+
+.full { grid-column:1/-1; }
+
+label { font-size:14px; }
+
+input {
+  width:100%;
+  padding:8px;
+  border-radius:8px;
+  border:1px solid #ccc;
+}
+
+button {
+  padding:8px 14px;
+  border-radius:8px;
+  border:none;
+  cursor:pointer;
+  font-weight:bold;
+}
+
+.primary { background:#2563eb; color:white; }
+.secondary { background:#e5e7eb; }
+.danger { background:#dc2626; color:white; }
+
+table {
+  width:100%;
+  border-collapse:collapse;
+  margin-top:12px;
+}
+
+th, td {
+  padding:8px;
+  border-bottom:1px solid #ddd;
+  font-size:13px;
+}
+
+th { background:#f1f5f9; }
+
+.whatsapp {
+  background:#22c55e;
+  color:white;
+  padding:6px 10px;
+  border-radius:6px;
+  text-decoration:none;
+  font-weight:bold;
+}
+
+/* 🔥 ESTILO DO EVENTO NO CALENDÁRIO */
+.fc-event {
+  border-radius:10px;
+}
+
+.event-box {
+  text-align:center;
+  text-transform:uppercase;
+  font-size:11px;
+  line-height:1.3;
+}
+
+.event-cliente {
+  font-weight:800;
+}
+
+.event-trajeto {
+  font-weight:500;
+}
+
+.event-km {
+  font-weight:700;
+}
+</style>
+</head>
+
+<body>
+<div class="card">
+<h2>🚚 Fretes e Mudanças</h2>
+
+<div class="grid">
+  <div>
+    <label>Cliente</label>
+    <input id="cliente">
+  </div>
+
+  <div>
+    <label>Telefone</label>
+    <input id="telefone" placeholder="11999999999">
+  </div>
+
+  <div>
+    <label>Data do serviço</label>
+    <input type="date" id="data">
+  </div>
+
+  <div>
+    <label>Distância (km)</label>
+    <input type="number" id="km" step="0.1">
+  </div>
+
+  <div class="full">
+    <label>Local de saída</label>
+    <input id="saida">
+  </div>
+
+  <div class="full">
+    <label>Local de destino</label>
+    <input id="destino">
+  </div>
+
+  <div>
+    <label>Consumo (km/L)</label>
+    <input id="kml" value="8">
+  </div>
+
+  <div>
+    <label>Preço diesel (R$/L)</label>
+    <input id="preco" value="6.2">
+  </div>
+
+  <div>
+    <label>Valor cobrado (R$)</label>
+    <input id="cobrado">
+  </div>
+
+  <div>
+    <label>Custo diesel (R$)</label>
+    <input id="diesel" disabled>
+  </div>
+
+  <div>
+    <label>Lucro (R$)</label>
+    <input id="lucro" disabled>
+  </div>
+</div>
+
+<br>
+<button class="primary" onclick="salvar()">Salvar</button>
+<button class="secondary" onclick="limpar()">Limpar</button>
+<button class="danger" onclick="apagarTudo()">Apagar tudo</button>
+
+<h3>📋 Planilha de registros</h3>
+<table>
+<thead>
+<tr>
+<th>Data</th>
+<th>Cliente</th>
+<th>Trajeto</th>
+<th>Km</th>
+<th>Cobrado</th>
+<th>Lucro</th>
+<th>WhatsApp</th>
+</tr>
+</thead>
+<tbody id="tabela"></tbody>
+</table>
+
+<h3>📆 Calendário</h3>
+<div id="calendario"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let calendar;
+
+/* ===== UTIL ===== */
+function corPorCliente(nome) {
+  let hash = 0;
+  for (let i = 0; i < nome.length; i++) {
+    hash = (hash * 31 + nome.charCodeAt(i)) >>> 0;
+  }
+  return `hsl(${hash % 360} 70% 45%)`;
+}
+
+function formatarDataBR(dataISO) {
+  const [a,m,d] = dataISO.split("-");
+  return `${d}/${m}/${a}`;
+}
+
+/* ===== CÁLCULO ===== */
+function calcular() {
+  const km = +$("km").value;
+  const kml = +$("kml").value;
+  const preco = +$("preco").value;
+  const cobrado = +$("cobrado").value;
+
+  if (km && kml && preco) {
+    const custo = (km / kml) * preco;
+    $("diesel").value = custo.toFixed(2);
+    if (cobrado) $("lucro").value = (cobrado - custo).toFixed(2);
+  }
+}
+
+["km","kml","preco","cobrado"].forEach(i =>
+  $(i).addEventListener("input", calcular)
+);
+
+/* ===== DADOS ===== */
+function dados() {
+  return JSON.parse(localStorage.getItem("fretes") || "[]");
+}
+
+/* ===== SALVAR ===== */
+function salvar() {
+  const reg = {
+    cliente:$("cliente").value,
+    telefone:$("telefone").value,
+    data:$("data").value,
+    saida:$("saida").value,
+    destino:$("destino").value,
+    km:+$("km").value,
+    cobrado:+$("cobrado").value,
+    diesel:+$("diesel").value,
+    lucro:+$("lucro").value
+  };
+
+  const lista = dados();
+  lista.push(reg);
+  localStorage.setItem("fretes", JSON.stringify(lista));
+
+  renderizar();
+  atualizarCalendario();
+  limpar();
+}
+
+/* ===== TABELA ===== */
+function renderizar() {
+  const t = $("tabela");
+  t.innerHTML = "";
+
+  dados().forEach(r => {
+    t.innerHTML += `
+    <tr>
+      <td>${formatarDataBR(r.data)}</td>
+      <td>${r.cliente}</td>
+      <td>${r.saida} → ${r.destino}</td>
+      <td>${r.km}</td>
+      <td>R$ ${r.cobrado}</td>
+      <td>R$ ${r.lucro}</td>
+      <td>
+        <a class="whatsapp" target="_blank"
+           href="https://wa.me/55${r.telefone}">
+           WhatsApp
+        </a>
+      </td>
+    </tr>`;
+  });
+}
+
+/* ===== CALENDÁRIO ===== */
+function iniciarCalendario() {
+  calendar = new FullCalendar.Calendar($("calendario"), {
+    locale:"pt-br",
+    initialView:"dayGridMonth",
+    height:"auto",
+
+    events: dados().map(r => ({
+      start: r.data,
+      allDay: true,
+      backgroundColor: corPorCliente(r.cliente),
+      borderColor: corPorCliente(r.cliente),
+      extendedProps: r
+    })),
+
+    eventContent: function(arg) {
+      const r = arg.event.extendedProps;
+      return {
+        html: `
+          <div class="event-box">
+            <div class="event-cliente">${r.cliente}</div>
+            <div class="event-trajeto">${r.saida} → ${r.destino}</div>
+            <div class="event-km">(${r.km} KM)</div>
+          </div>
+        `
+      };
+    }
+  });
+
+  calendar.render();
+}
+
+function atualizarCalendario() {
+  calendar.removeAllEvents();
+  dados().forEach(r => {
+    const cor = corPorCliente(r.cliente);
+    calendar.addEvent({
+      start: r.data,
+      allDay:true,
+      backgroundColor: cor,
+      borderColor: cor,
+      extendedProps:r
+    });
+  });
+}
+
+function limpar() {
+  ["cliente","telefone","data","saida","destino","km","cobrado","diesel","lucro"]
+    .forEach(i => $(i).value="");
+}
+
+function apagarTudo() {
+  localStorage.removeItem("fretes");
+  renderizar();
+  atualizarCalendario();
+}
+
+/* ===== INIT ===== */
+renderizar();
+iniciarCalendario();
+</script>
+</body>
+</html>

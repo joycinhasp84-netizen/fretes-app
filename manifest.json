@@ -1,7 +1,7 @@
 {
   "name": "Fretes e Mudanças",
   "short_name": "Fretes",
-  "start_url": "./fretes.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f6f6f6",
   "theme_color": "#1f6feb",
@@ -9,4 +9,5 @@
     { "src": "logo.png", "sizes": "192x192", "type": "image/png" },
     { "src": "sol.png", "sizes": "512x384", "type": "image/png" }
   ]
+
 }
